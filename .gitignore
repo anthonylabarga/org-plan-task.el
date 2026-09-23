@@ -1,0 +1,19 @@
+# Emacs backups, auto-save files, and lock files
+*~
+\#*\#
+.\#*
+
+# Compiled Emacs Lisp and generated autoloads
+*.elc
+*.eln
+*-autoloads.el
+
+# Local dependency and build caches
+/.cask/
+/.eask/
+/.eldev/
+/elpa/
+/eln-cache/
+
+# macOS metadata
+.DS_Store
