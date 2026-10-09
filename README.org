@@ -1,0 +1,188 @@
+#+title: org-plan-task
+#+author: John Anthony Labarga
+
+* Installation
+
+=org-plan-task= interactively assigns available half-hour time blocks to
+Org tasks. It requires Emacs 29.1 or newer and Org 9.6 or newer, with no
+external runtime dependencies.
+
+For a source checkout, start =emacs -Q= and evaluate the following with
+your own checkout path. The entry point loads its modules from =lisp/=.
+
+#+begin_src emacs-lisp
+(add-to-list 'load-path "/path/to/org-plan-task")
+(require 'org-plan-task)
+#+end_src
+
+Alternatively, run =make deps= followed by =make package= in the checkout
+and use =M-x package-install-file= to install
+=dist/org-plan-task-0.1.0.tar=. The installed command is autoloaded.
+This package has not been submitted to MELPA by this implementation.
+
+* Configure your workday
+
+Defaults are Monday–Friday, 09:00–17:00, with no breaks. Working hours
+must increase within the same local calendar day. Weekdays are full
+English names matched without regard to case. Clocks use strict 24-hour
+=HH:MM= strings.
+
+#+begin_src emacs-lisp
+(require 'org-plan-task)
+(setq org-plan-task-workday-list
+      '("Monday" "Tuesday" "Wednesday" "Thursday" "Friday")
+      org-plan-task-start-workday "09:00"
+      org-plan-task-end-workday "17:00"
+      org-plan-task-breaks '(("12:00" "13:00") ("15:00" "15:15")))
+#+end_src
+
+Lists and vectors both work, including vector break pairs:
+
+#+begin_src emacs-lisp
+(setq org-plan-task-workday-list ["Monday" "Wednesday" "Friday"]
+      org-plan-task-breaks [["12:00" "13:00"]])
+#+end_src
+
+Breaks must increase, never overlap, and stay inside working hours.
+Touching breaks are allowed. Irregular boundaries are supported: a
+15:10–15:20 break excludes the entire 15:00–15:30 block. Configuration
+must leave at least one complete half-hour block. Use
+=M-x customize-group RET org-plan-task RET= to inspect the options.
+
+* Plan a task
+
+Place point within an Org heading or on its agenda entry and run
+=M-x org-plan-task=. Entries without a live heading marker produce a
+clear error. The command uses the task's own =EFFORT= property; inherited
+effort does not replace a missing task estimate.
+
+#+begin_example
+* TODO Write proposal
+DEADLINE: <2026-10-05 Mon>
+:PROPERTIES:
+:EFFORT: 1:00
+:END:
+Notes about the proposal.
+#+end_example
+
+Missing effort and deadline values are prompted for. Effort follows Org
+duration conventions, for example =75=, =1:15= or =1h 15min=. It must be
+positive. A 75-minute task needs three half-hour blocks. Date-only
+deadlines mean the configured workday end on that date; timed deadlines
+retain their explicit time.
+
+The first offered block starts on the first =:00= or =:30= boundary at or
+after the current instant. Even one second after 09:00 means starting at
+09:30. Only complete blocks inside working hours are offered. Nonworking
+days, breaks, and reserved time are skipped.
+
+At each offer, the prompt shows the date, start/end time and remaining
+allocation:
+
+- =a=: assign this block.
+- =s=: skip this block.
+- =n=: skip the rest of this day and search the next workday.
+- =q=: cancel planning.
+
+=C-g= also cancels, including while searching through conflicts. There is
+no fixed search horizon; you can continue beyond the deadline. All
+answers and choices stay in memory until enough blocks have been
+selected. Cancellation preserves the task unchanged.
+
+* Reserved time and reminders
+
+All registered =org-agenda-files= are inspected, using live buffers so
+unsaved changes count. Agenda directories and file lists are resolved by
+Org. The task's current buffer is also inspected, even when it is not an
+agenda file. Unreadable registered conflict sources produce an error
+instead of being silently skipped.
+
+These active explicit timed ranges reserve time:
+
+#+begin_example
+<2026-10-05 Mon 10:00-11:00>
+<2026-10-05 Mon 16:00>--<2026-10-06 Tue 10:00>
+<2026-10-05 Mon 11:00-11:30 +1w>
+#+end_example
+
+Timed ranges in =SCHEDULED= and =DEADLINE= metadata also count. Ordinary
+hourly, daily, weekly, monthly and yearly repeaters are supported using
+Org recurrence dates. Hourly repeats use elapsed hours; calendar repeats
+retain local clock times across daylight-saving changes. Diary sexps are
+outside the initial scope.
+
+Point timestamps such as =<2026-10-05 Mon 10:00>= and date-only reminders
+reserve no time. Inactive timestamps, clock logs and ranges lacking
+explicit times at both endpoints also reserve no time. A conflict
+includes its start and excludes its end: any positive overlap excludes a
+block, but a meeting ending at 10:00 allows a 10:00 block.
+
+* Stored plans and extensions
+
+Once all blocks are chosen, the command atomically commits the effort,
+any newly entered deadline, and a single =:PLAN:= drawer. The drawer is
+placed after planning metadata and the property drawer, before body
+text. Child headings, unrelated drawers and notes are preserved.
+Adjacent or overlapping allocations on the same date are merged, while
+gaps and date boundaries remain separate.
+
+#+begin_example
+* TODO Write proposal
+DEADLINE: <2026-10-05 Mon>
+:PROPERTIES:
+:EFFORT: 1:00
+:END:
+:PLAN:
+<2026-10-05 Mon 09:00-10:00>
+:END:
+Notes about the proposal.
+#+end_example
+
+Invoking the command again on a planned task shows its old effort and
+requires a strictly larger estimate. Only the increase is rounded up:
+75 → 90 minutes adds 30 minutes to the existing 90-minute allocation.
+Previous allocations remain reserved and are retained in the result.
+Missing or invalid old effort, duplicate drawers, unclosed drawers, and
+invalid plan contents produce errors before writing.
+
+A write failure rolls back all task edits. If the source buffer changes
+during prompting, the command aborts so you can retry. The file is never
+saved automatically.
+
+Finishing exactly at the deadline is allowed. A later finish produces a
+warning suggesting that you adjust the deadline; the command preserves
+the original deadline. Existing agenda buffers are refreshed after a
+successful update. A refresh failure is reported separately and the
+committed plan remains in the source buffer.
+
+* Development
+
+#+begin_src sh
+make deps
+make check
+#+end_src
+
+Development tools live in =.deps/elpa= and do not use your personal Emacs
+configuration. =make check= runs ERT, byte compilation with warnings as
+errors, =package-lint=, =checkdoc=, a build using the MELPA recipe and a
+clean installation/autoload check. Missing tools cause a failure. Set
+=EMACS=/path/to/emacs= to choose another executable. CI covers Emacs
+29.1 and 31.1.
+
+For a targeted ERT run, the repository root alone suffices on the load path:
+
+#+begin_src sh
+emacs -Q --batch -L . -L test -l test/org-plan-task-test.el \
+  --eval '(ert-run-tests-batch-and-exit "org-plan-task-extension-")'
+#+end_src
+
+=make package= builds =dist/org-plan-task-0.1.0.tar= from the current
+checkout. It validates =recipes/org-plan-task= and includes all modules,
+the usage guide, news and license. Publishing, creating releases and
+submitting a MELPA pull request are separate actions.
+
+* License and attribution
+
+Copyright © 2026 John Anthony Labarga. Distributed under
+GPL-3.0-or-later; see [[file:LICENSE][LICENSE]]. Developed with AI assistance from
+OpenAI Codex.
