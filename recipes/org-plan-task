@@ -1,0 +1,4 @@
+(org-plan-task
+ :fetcher github
+ :repo "anthonylabarga/org-plan-task.el"
+ :files ("org-plan-task.el" "lisp/*.el" "README.org" "NEWS.org" "LICENSE"))
