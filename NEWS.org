@@ -1,0 +1,15 @@
+#+title: org-plan-task news
+
+* 0.1.0
+
+- Initial =org-plan-task= command for Org headings and agenda entries.
+- Requires Emacs 29.1 or newer and Org 9.6 or newer.
+- Add =org-plan-task-workday-list=, =org-plan-task-start-workday=,
+  =org-plan-task-end-workday= and =org-plan-task-breaks= options.
+- Allocate complete half-hour blocks docked to =:00= and =:30=.
+- Reserve explicit active timed spans across live agenda buffers,
+  including ordinary repeaters; reminders and clock logs reserve no time.
+- Extend plans by rounding the increase in effort independently.
+- Interpret date-only deadlines as the configured end of the workday.
+- Commit metadata and PLAN drawers atomically; cancellation preserves
+  the task, and successful changes refresh live agendas.
