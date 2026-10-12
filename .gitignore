@@ -14,6 +14,15 @@
 /.eldev/
 /elpa/
 /eln-cache/
+/.deps/
+/.build/
+/dist/
+/.build-artifact
+/coverage/
+
+# Local editor state
+/.dir-locals-2.el
+/.vscode/
 
 # macOS metadata
 .DS_Store
