@@ -1,0 +1,38 @@
+name: Sync repository settings
+
+on:
+  push:
+    paths:
+      - '.github/repository.json'
+      - '.github/workflows/repository-settings.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-settings
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Apply repository settings
+        env:
+          GH_TOKEN: ${{ secrets.REPO_SETTINGS_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo '::error::Add the REPO_SETTINGS_TOKEN Actions secret with Administration: read and write permission for this repository. See README.org: GitHub repository settings.'
+            exit 1
+          fi
+          python3 -m json.tool .github/repository.json > /dev/null
+          gh api --method PATCH "repos/$GH_REPO" \
+            --input .github/repository.json \
+            --jq '.description'
