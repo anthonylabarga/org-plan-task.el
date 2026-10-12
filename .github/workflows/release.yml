@@ -1,0 +1,75 @@
+name: Build and release package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check package version
+        id: version
+        shell: bash
+        run: |
+          version=$(sed -n 's/^;; Version: *//p' org-plan-task.el | tr -d '\r')
+          if [[ -z "$version" ]]; then
+            echo '::error::Missing Version header in org-plan-task.el'
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME must match package version v$version"
+            exit 1
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+      - uses: purcell/setup-emacs@master
+        with:
+          version: '29.1'
+      - name: Install build dependencies
+        run: make deps
+      - name: Test and build package
+        run: make check
+      - name: Save installable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: org-plan-task-${{ steps.version.outputs.version }}
+          path: dist/org-plan-task-${{ steps.version.outputs.version }}.tar
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: org-plan-task-${{ needs.build.outputs.version }}
+          path: dist
+      - name: Publish release with installable package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        shell: bash
+        run: |
+          gh release create "$TAG" "dist/org-plan-task-$VERSION.tar" \
+            --verify-tag --draft \
+            --title "org-plan-task $VERSION" --generate-notes
+          gh release edit "$TAG" --draft=false
